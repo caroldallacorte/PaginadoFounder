@@ -1,25 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box, Button, Typography, Container, Tabs, Tab, Paper
+  Box, Button, Typography, Container, Tabs, Tab, Paper, CircularProgress
 } from '@mui/material';
 import { useRouter } from 'next/router';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function AdminDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState(0);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { isAuthenticated, isLoading, logout } = useAuth();
+  const [redirecting, setRedirecting] = useState(false);
 
+  // Redirect if not authenticated
   useEffect(() => {
-    const loginStatus = localStorage.getItem('isLoggedIn');
-    if (loginStatus !== 'true') {
+    if (!isLoading && !isAuthenticated && !redirecting) {
+      setRedirecting(true);
+      console.log('Not authenticated, redirecting to login');
       router.push('/admin');
-    } else {
-      setIsLoggedIn(true);
     }
-  }, [router]);
+  }, [isLoading, isAuthenticated, router, redirecting]);
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
+  };
+
+  const handleLogout = () => {
+    logout();
+    // The actual redirect happens in the AuthContext after logout
   };
 
   const renderTabContent = () => {
@@ -121,8 +128,18 @@ export default function AdminDashboard() {
     }
   };
 
-  if (!isLoggedIn) {
-    return <Typography>Carregando...</Typography>;
+  // Show loading state while authentication is being checked
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  // If not authenticated, don't render anything (redirect happens in useEffect)
+  if (!isAuthenticated) {
+    return null;
   }
 
   return (
@@ -147,10 +164,7 @@ export default function AdminDashboard() {
           <Button
             variant="contained"
             color="error"
-            onClick={() => {
-              localStorage.removeItem('isLoggedIn');
-              router.push('/admin');
-            }}
+            onClick={handleLogout}
           >
             Sair
           </Button>

@@ -1,29 +1,38 @@
 import React, { useState } from 'react';
 import { Box, Button, TextField, Typography, Paper, Container } from '@mui/material';
 import { useRouter } from 'next/router';
+import { useAuth } from '../../contexts/AuthContext'; 
 
 export default function AdminLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
-
-  const storedHashedPassword = '3c177b7b8a4da8da41ccdfe0fb800b58147aca59dff04098180e145791582476';
+  const { login } = useAuth(); 
 
   const handleLogin = async (e) => {
     e.preventDefault();
-
-    // Gera hash da senha digitada
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashedInputPassword = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-    if (hashedInputPassword === storedHashedPassword) {
-      localStorage.setItem('isLoggedIn', 'true');
-      router.push('/admin/dashboard');
-    } else {
-      setError('Senha incorreta. Tente novamente.');
+    
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        // Call the context's login function instead of directly setting sessionStorage
+        login(data.token);
+        router.push('/admin/dashboard');
+      } else {
+        setError(data.message || 'Senha incorreta. Tente novamente.');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('Erro ao tentar fazer login. Por favor, tente novamente.');
     }
   };
 

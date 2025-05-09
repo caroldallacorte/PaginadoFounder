@@ -1,4 +1,5 @@
 import { createTheme, ThemeProvider, CssBaseline } from '@mui/material';
+import { AuthProvider } from './contexts/AuthContext';
 
 const theme = createTheme({
   palette: {
@@ -22,7 +23,9 @@ function MyApp({ Component, pageProps }) {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Component {...pageProps} />
+      <AuthProvider>
+        <Component {...pageProps} />
+      </AuthProvider>
     </ThemeProvider>
   );
 }
