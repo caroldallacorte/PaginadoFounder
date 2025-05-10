@@ -1,37 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Button, TextField, Typography, Container, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogActions, DialogContent, DialogTitle, IconButton } from '@mui/material';
+import { Box, Button, TextField, Typography, Container, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, CircularProgress } from '@mui/material';
 import { useRouter } from 'next/router';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ImageUploader from '../../../src/components/ImageUploader';
-
-// Dados iniciais de exemplo
-const initialFundos = [
-  { 
-    id: 1, 
-    parceiro: 'Fundo Investimentos A', 
-    tipoInvestimento: 'Seed', 
-    tamanhoCheque: 'R$ 500K - R$ 2M', 
-    tese: 'Fintechs e Marketplaces em estágio inicial', 
-    contato: 'investimentos@fundoa.com',
-    logo: '' 
-  },
-  { 
-    id: 2, 
-    parceiro: 'Venture Capital XYZ', 
-    tipoInvestimento: 'Series A', 
-    tamanhoCheque: 'R$ 1M - R$ 5M', 
-    tese: 'Healthtechs e Edtechs em estágio de crescimento', 
-    contato: 'parcerias@vcxyz.com',
-    logo: '' 
-  }
-];
+import { useAuth } from '../../../contexts/AuthContext';
+import { useFunds } from '../../../hooks/useFunds';
 
 export default function FundosParceiros() {
   const router = useRouter();
-  const [fundos, setFundos] = useState([]);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { isAuthenticated, isLoading: authLoading, logout } = useAuth();
+  const { funds, isLoading, error, addFund, updateFund, deleteFund } = useFunds();
+  
   const [openDialog, setOpenDialog] = useState(false);
   const [editingFundo, setEditingFundo] = useState(null);
   const [formData, setFormData] = useState({
@@ -43,35 +24,22 @@ export default function FundosParceiros() {
     logo: ''
   });
 
+  // Redirect if not authenticated
   useEffect(() => {
-    // Verificar se o usuário está logado
-    const loginStatus = localStorage.getItem('isLoggedIn');
-    if (loginStatus !== 'true') {
+    if (!authLoading && !isAuthenticated) {
       router.push('/admin');
-    } else {
-      setIsLoggedIn(true);
     }
-
-    // Carregar fundos quando o componente montar
-    const savedFundos = localStorage.getItem('fundos-parceiros');
-    if (savedFundos) {
-      setFundos(JSON.parse(savedFundos));
-    } else {
-      // Se não houver dados salvos, usar os dados iniciais
-      setFundos(initialFundos);
-      // E salvar no localStorage
-      localStorage.setItem('fundos-parceiros', JSON.stringify(initialFundos));
-    }
-  }, [router]);
+  }, [authLoading, isAuthenticated, router]);
 
   const handleOpenDialog = (fundo = null) => {
     if (fundo) {
       // Modo edição
       setEditingFundo(fundo);
       setFormData({
+        id: fundo.id,
         parceiro: fundo.parceiro,
-        tipoInvestimento: fundo.tipoInvestimento,
-        tamanhoCheque: fundo.tamanhoCheque,
+        tipoInvestimento: fundo.tipo_investimento,
+        tamanhoCheque: fundo.tamanho_cheque,
         tese: fundo.tese,
         contato: fundo.contato,
         logo: fundo.logo
@@ -110,46 +78,39 @@ export default function FundosParceiros() {
     });
   };
 
-  const handleSave = () => {
-    let updatedFundos;
-    
-    if (editingFundo) {
-      // Atualizar fundo existente
-      updatedFundos = fundos.map(f => 
-        f.id === editingFundo.id ? { ...f, ...formData } : f
-      );
-    } else {
-      // Adicionar novo fundo
-      const newFundo = {
-        id: Date.now(), // ID temporário baseado no timestamp
-        ...formData
-      };
-      updatedFundos = [...fundos, newFundo];
+  const handleSave = async () => {
+    try {
+      if (editingFundo) {
+        // Update existing fund
+        await updateFund(formData);
+      } else {
+        // Add new fund
+        await addFund(formData);
+      }
+      handleCloseDialog();
+    } catch (err) {
+      console.error('Error saving fund:', err);
+      // Show error to user
     }
-    
-    // Atualizar o estado
-    setFundos(updatedFundos);
-    
-    // Salvar no localStorage
-    localStorage.setItem('fundos-parceiros', JSON.stringify(updatedFundos));
-    
-    handleCloseDialog();
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (confirm('Tem certeza que deseja excluir este fundo parceiro?')) {
-      const updatedFundos = fundos.filter(f => f.id !== id);
-      
-      // Atualizar o estado
-      setFundos(updatedFundos);
-      
-      // Salvar no localStorage
-      localStorage.setItem('fundos-parceiros', JSON.stringify(updatedFundos));
+      try {
+        await deleteFund(id);
+      } catch (err) {
+        console.error('Error deleting fund:', err);
+        // Show error to user
+      }
     }
   };
 
-  if (!isLoggedIn) {
-    return <Typography>Carregando...</Typography>;
+  if (authLoading) {
+    return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>;
+  }
+
+  if (!isAuthenticated) {
+    return null; // Will redirect in useEffect
   }
 
   return (
@@ -168,10 +129,7 @@ export default function FundosParceiros() {
           <Button 
             variant="contained" 
             color="error" 
-            onClick={() => {
-              localStorage.removeItem('isLoggedIn');
-              router.push('/admin');
-            }}
+            onClick={logout}
           >
             Sair
           </Button>
@@ -200,60 +158,68 @@ export default function FundosParceiros() {
           Adicionar Novo Fundo Parceiro
         </Button>
         
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                <TableCell>Logo</TableCell>
-                <TableCell>Parceiro</TableCell>
-                <TableCell>Tipo de Investimento</TableCell>
-                <TableCell>Tamanho de Cheque</TableCell>
-                <TableCell>Tese</TableCell>
-                <TableCell>Contato</TableCell>
-                <TableCell align="center">Ações</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {fundos.map((fundo) => (
-                <TableRow key={fundo.id}>
-                  <TableCell>
-                    {fundo.logo ? (
-                      <img 
-                        src={fundo.logo} 
-                        alt={`Logo ${fundo.parceiro}`} 
-                        style={{ maxWidth: 50, maxHeight: 50, objectFit: 'contain' }} 
-                      />
-                    ) : (
-                      <Box sx={{ width: 50, height: 50, bgcolor: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Typography variant="caption" color="text.secondary">Sem logo</Typography>
-                      </Box>
-                    )}
-                  </TableCell>
-                  <TableCell>{fundo.parceiro}</TableCell>
-                  <TableCell>{fundo.tipoInvestimento}</TableCell>
-                  <TableCell>{fundo.tamanhoCheque}</TableCell>
-                  <TableCell>{fundo.tese}</TableCell>
-                  <TableCell>{fundo.contato}</TableCell>
-                  <TableCell align="center">
-                    <IconButton onClick={() => handleOpenDialog(fundo)} color="primary">
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton onClick={() => handleDelete(fundo.id)} color="error">
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
+        {isLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : error ? (
+          <Typography color="error">Erro ao carregar fundos parceiros: {error}</Typography>
+        ) : (
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                  <TableCell>Logo</TableCell>
+                  <TableCell>Parceiro</TableCell>
+                  <TableCell>Tipo de Investimento</TableCell>
+                  <TableCell>Tamanho de Cheque</TableCell>
+                  <TableCell>Tese</TableCell>
+                  <TableCell>Contato</TableCell>
+                  <TableCell align="center">Ações</TableCell>
                 </TableRow>
-              ))}
-              {fundos.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    Nenhum fundo parceiro cadastrado.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {funds.map((fundo) => (
+                  <TableRow key={fundo.id}>
+                    <TableCell>
+                      {fundo.logo ? (
+                        <img 
+                          src={fundo.logo} 
+                          alt={`Logo ${fundo.parceiro}`} 
+                          style={{ maxWidth: 50, maxHeight: 50, objectFit: 'contain' }} 
+                        />
+                      ) : (
+                        <Box sx={{ width: 50, height: 50, bgcolor: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Typography variant="caption" color="text.secondary">Sem logo</Typography>
+                        </Box>
+                      )}
+                    </TableCell>
+                    <TableCell>{fundo.parceiro}</TableCell>
+                    <TableCell>{fundo.tipo_investimento}</TableCell>
+                    <TableCell>{fundo.tamanho_cheque}</TableCell>
+                    <TableCell>{fundo.tese}</TableCell>
+                    <TableCell>{fundo.contato}</TableCell>
+                    <TableCell align="center">
+                      <IconButton onClick={() => handleOpenDialog(fundo)} color="primary">
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton onClick={() => handleDelete(fundo.id)} color="error">
+                        <DeleteIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {funds.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center">
+                      Nenhum fundo parceiro cadastrado.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
       </Container>
       
       {/* Diálogo para adicionar/editar fundo */}

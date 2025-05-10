@@ -1,50 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Button, TextField, Typography, Container, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Chip, Autocomplete } from '@mui/material';
+import { Box, Button, TextField, Typography, Container, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Chip, Autocomplete, CircularProgress } from '@mui/material';
 import { useRouter } from 'next/router';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ImageUploader from '../../../src/components/ImageUploader';
-
-// Dados iniciais de exemplo
-const initialMentores = [
-  { 
-    id: 1, 
-    nome: 'Ana Silva', 
-    cargo: 'CEO', 
-    empresa: 'Tech Solutions', 
-    especialidades: ['Vendas', 'Marketing', 'Finanças'],
-    contato: 'ana.silva@techsolutions.com',
-    foto: '' 
-  },
-  { 
-    id: 2, 
-    nome: 'Carlos Mendes', 
-    cargo: 'CTO', 
-    empresa: 'Inovação Digital', 
-    especialidades: ['Produto', 'CS'],
-    contato: 'carlos@inovacaodigital.com',
-    foto: '' 
-  }
-];
+import { useAuth } from '../../../contexts/AuthContext';
+import { useMentors } from '../../../hooks/useMentors';
 
 // Lista de especialidades pré-definidas
 const especialidadesDisponiveis = [
-  'Vendas', 
-  'Marketing', 
-  'Inbound', 
-  'Outbound', 
-  'Parceiros', 
-  'Produto', 
-  'CS', 
-  'Finanças', 
-  'People'
+  'Vendas', 'Marketing', 'Inbound', 'Outbound', 'Parceiros', 
+  'Produto', 'CS', 'Finanças', 'People'
 ];
 
 export default function Mentores() {
   const router = useRouter();
-  const [mentores, setMentores] = useState([]);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { isAuthenticated, isLoading: authLoading, logout } = useAuth();
+  const { mentors, isLoading, error, addMentor, updateMentor, deleteMentor } = useMentors();
+  
   const [openDialog, setOpenDialog] = useState(false);
   const [editingMentor, setEditingMentor] = useState(null);
   const [formData, setFormData] = useState({
@@ -58,45 +32,23 @@ export default function Mentores() {
   const [novaEspecialidade, setNovaEspecialidade] = useState('');
   const [especialidades, setEspecialidades] = useState(especialidadesDisponiveis);
 
+  // Redirect if not authenticated
   useEffect(() => {
-    // Verificar se o usuário está logado
-    const loginStatus = localStorage.getItem('isLoggedIn');
-    if (loginStatus !== 'true') {
+    if (!authLoading && !isAuthenticated) {
       router.push('/admin');
-    } else {
-      setIsLoggedIn(true);
     }
-
-    // Carregar mentores quando o componente montar
-    const savedMentores = localStorage.getItem('mentores');
-    if (savedMentores) {
-      setMentores(JSON.parse(savedMentores));
-    } else {
-      // Se não houver dados salvos, usar os dados iniciais
-      setMentores(initialMentores);
-      // E salvar no localStorage
-      localStorage.setItem('mentores', JSON.stringify(initialMentores));
-    }
-
-    // Carregar especialidades personalizadas
-    const savedEspecialidades = localStorage.getItem('especialidades');
-    if (savedEspecialidades) {
-      setEspecialidades(JSON.parse(savedEspecialidades));
-    } else {
-      // Se não houver especialidades salvas, usar as pré-definidas
-      localStorage.setItem('especialidades', JSON.stringify(especialidadesDisponiveis));
-    }
-  }, [router]);
+  }, [authLoading, isAuthenticated, router]);
 
   const handleOpenDialog = (mentor = null) => {
     if (mentor) {
       // Modo edição
       setEditingMentor(mentor);
       setFormData({
+        id: mentor.id,
         nome: mentor.nome,
         cargo: mentor.cargo,
         empresa: mentor.empresa,
-        especialidades: mentor.especialidades,
+        especialidades: mentor.especialidades || [],
         contato: mentor.contato,
         foto: mentor.foto
       });
@@ -146,7 +98,6 @@ export default function Mentores() {
     if (novaEspecialidade && !especialidades.includes(novaEspecialidade)) {
       const updatedEspecialidades = [...especialidades, novaEspecialidade];
       setEspecialidades(updatedEspecialidades);
-      localStorage.setItem('especialidades', JSON.stringify(updatedEspecialidades));
       setFormData({
         ...formData,
         especialidades: [...formData.especialidades, novaEspecialidade]
@@ -155,46 +106,39 @@ export default function Mentores() {
     }
   };
 
-  const handleSave = () => {
-    let updatedMentores;
-    
-    if (editingMentor) {
-      // Atualizar mentor existente
-      updatedMentores = mentores.map(m => 
-        m.id === editingMentor.id ? { ...m, ...formData } : m
-      );
-    } else {
-      // Adicionar novo mentor
-      const newMentor = {
-        id: Date.now(), // ID temporário baseado no timestamp
-        ...formData
-      };
-      updatedMentores = [...mentores, newMentor];
+  const handleSave = async () => {
+    try {
+      if (editingMentor) {
+        // Update existing mentor
+        await updateMentor(formData);
+      } else {
+        // Add new mentor
+        await addMentor(formData);
+      }
+      handleCloseDialog();
+    } catch (err) {
+      console.error('Error saving mentor:', err);
+      // Show error to user
     }
-    
-    // Atualizar o estado
-    setMentores(updatedMentores);
-    
-    // Salvar no localStorage
-    localStorage.setItem('mentores', JSON.stringify(updatedMentores));
-    
-    handleCloseDialog();
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (confirm('Tem certeza que deseja excluir este mentor?')) {
-      const updatedMentores = mentores.filter(m => m.id !== id);
-      
-      // Atualizar o estado
-      setMentores(updatedMentores);
-      
-      // Salvar no localStorage
-      localStorage.setItem('mentores', JSON.stringify(updatedMentores));
+      try {
+        await deleteMentor(id);
+      } catch (err) {
+        console.error('Error deleting mentor:', err);
+        // Show error to user
+      }
     }
   };
 
-  if (!isLoggedIn) {
-    return <Typography>Carregando...</Typography>;
+  if (authLoading) {
+    return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>;
+  }
+
+  if (!isAuthenticated) {
+    return null; // Will redirect in useEffect
   }
 
   return (
@@ -213,10 +157,7 @@ export default function Mentores() {
           <Button 
             variant="contained" 
             color="error" 
-            onClick={() => {
-              localStorage.removeItem('isLoggedIn');
-              router.push('/admin');
-            }}
+            onClick={logout}
           >
             Sair
           </Button>
@@ -245,66 +186,74 @@ export default function Mentores() {
           Adicionar Novo Mentor
         </Button>
         
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                <TableCell>Foto</TableCell>
-                <TableCell>Nome</TableCell>
-                <TableCell>Cargo</TableCell>
-                <TableCell>Empresa</TableCell>
-                <TableCell>Especialidades</TableCell>
-                <TableCell>Contato</TableCell>
-                <TableCell align="center">Ações</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {mentores.map((mentor) => (
-                <TableRow key={mentor.id}>
-                  <TableCell>
-                    {mentor.foto ? (
-                      <img 
-                        src={mentor.foto} 
-                        alt={`Foto ${mentor.nome}`} 
-                        style={{ maxWidth: 50, maxHeight: 50, objectFit: 'cover', borderRadius: '50%' }} 
-                      />
-                    ) : (
-                      <Box sx={{ width: 50, height: 50, bgcolor: '#f5f5f5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Typography variant="caption" color="text.secondary">Sem foto</Typography>
+        {isLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : error ? (
+          <Typography color="error">Erro ao carregar mentores: {error}</Typography>
+        ) : (
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                  <TableCell>Foto</TableCell>
+                  <TableCell>Nome</TableCell>
+                  <TableCell>Cargo</TableCell>
+                  <TableCell>Empresa</TableCell>
+                  <TableCell>Especialidades</TableCell>
+                  <TableCell>Contato</TableCell>
+                  <TableCell align="center">Ações</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {mentors.map((mentor) => (
+                  <TableRow key={mentor.id}>
+                    <TableCell>
+                      {mentor.foto ? (
+                        <img 
+                          src={mentor.foto} 
+                          alt={`Foto ${mentor.nome}`} 
+                          style={{ maxWidth: 50, maxHeight: 50, objectFit: 'cover', borderRadius: '50%' }} 
+                        />
+                      ) : (
+                        <Box sx={{ width: 50, height: 50, bgcolor: '#f5f5f5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Typography variant="caption" color="text.secondary">Sem foto</Typography>
+                        </Box>
+                      )}
+                    </TableCell>
+                    <TableCell>{mentor.nome}</TableCell>
+                    <TableCell>{mentor.cargo}</TableCell>
+                    <TableCell>{mentor.empresa}</TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {mentor.especialidades && mentor.especialidades.map((especialidade) => (
+                          <Chip key={especialidade} label={especialidade} size="small" />
+                        ))}
                       </Box>
-                    )}
-                  </TableCell>
-                  <TableCell>{mentor.nome}</TableCell>
-                  <TableCell>{mentor.cargo}</TableCell>
-                  <TableCell>{mentor.empresa}</TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {mentor.especialidades.map((especialidade) => (
-                        <Chip key={especialidade} label={especialidade} size="small" />
-                      ))}
-                    </Box>
-                  </TableCell>
-                  <TableCell>{mentor.contato}</TableCell>
-                  <TableCell align="center">
-                    <IconButton onClick={() => handleOpenDialog(mentor)} color="primary">
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton onClick={() => handleDelete(mentor.id)} color="error">
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {mentores.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    Nenhum mentor cadastrado.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                    </TableCell>
+                    <TableCell>{mentor.contato}</TableCell>
+                    <TableCell align="center">
+                      <IconButton onClick={() => handleOpenDialog(mentor)} color="primary">
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton onClick={() => handleDelete(mentor.id)} color="error">
+                        <DeleteIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {mentors.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center">
+                      Nenhum mentor cadastrado.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
       </Container>
       
       {/* Diálogo para adicionar/editar mentor */}

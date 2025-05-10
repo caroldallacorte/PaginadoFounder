@@ -1,19 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box, Button, Typography, Container, Grid, Paper, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, Chip
+  TableCell, TableContainer, TableHead, TableRow, Chip, CircularProgress
 } from '@mui/material';
 import { useRouter } from 'next/router';
+import { useBenefits } from '../hooks/useBenefits';
+import { useFunds } from '../hooks/useFunds';
+import { useMentors } from '../hooks/useMentors';
+import { useMaterials } from '../hooks/useMaterials';
 
 export default function Home() {
   const router = useRouter();
   const [activeCategory, setActiveCategory] = useState(null);
-  const [benefitsData, setBenefitsData] = useState({});
-  const [fundosData, setFundosData] = useState([]);
-  const [mentoresData, setMentoresData] = useState([]);
-  const [materiaisData, setMateriaisData] = useState([]);
   const [selectedBenefitCategory, setSelectedBenefitCategory] = useState('marketing-vendas');
   const [isClient, setIsClient] = useState(false);
+
+  // Use the hooks to fetch data from API/database
+  const { benefits: selectedBenefits, isLoading: benefitsLoading, error: benefitsError } = useBenefits(selectedBenefitCategory);
+  const { funds, isLoading: fundsLoading, error: fundsError } = useFunds();
+  const { mentors, isLoading: mentorsLoading, error: mentorsError } = useMentors();
+  const { materials, isLoading: materialsLoading, error: materialsError } = useMaterials();
 
   const categoryNames = {
     'marketing-vendas': 'Marketing/Vendas',
@@ -25,28 +31,6 @@ export default function Home() {
 
   useEffect(() => {
     setIsClient(true);
-
-    if (typeof window !== 'undefined') {
-      Object.keys(categoryNames).forEach(category => {
-        const saved = localStorage.getItem(`benefits-${category}`);
-        if (saved) {
-          try {
-            setBenefitsData(prev => ({ ...prev, [category]: JSON.parse(saved) }));
-          } catch (e) {
-            console.error(`Erro ao carregar benefícios da categoria ${category}:`, e);
-          }
-        }
-      });
-
-      const savedFundos = localStorage.getItem('fundos-parceiros');
-      if (savedFundos) setFundosData(JSON.parse(savedFundos));
-
-      const savedMentores = localStorage.getItem('mentores');
-      if (savedMentores) setMentoresData(JSON.parse(savedMentores));
-
-      const savedMateriais = localStorage.getItem('materiais-apoio');
-      if (savedMateriais) setMateriaisData(JSON.parse(savedMateriais));
-    }
   }, []);
 
   const handleCategoryClick = (category) => setActiveCategory(category);
@@ -67,7 +51,6 @@ export default function Home() {
 
     switch (activeCategory) {
       case 'beneficios':
-        const currentBenefits = benefitsData[selectedBenefitCategory] || [];
         return (
           <>
             <Typography variant="h4" gutterBottom>Benefícios</Typography>
@@ -90,30 +73,56 @@ export default function Home() {
                 </Grid>
               ))}
             </Grid>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                    <TableCell>Logo</TableCell>
-                    <TableCell>Parceiro</TableCell>
-                    <TableCell>Descrição</TableCell>
-                    <TableCell>Benefício</TableCell>
-                    <TableCell>Como Ativar</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {currentBenefits.map((benefit) => (
-                    <TableRow key={benefit.id}>
-                      <TableCell>{benefit.logo ? <img src={benefit.logo} alt="" style={{ maxWidth: 50 }} /> : 'Sem logo'}</TableCell>
-                      <TableCell>{benefit.parceiro}</TableCell>
-                      <TableCell>{benefit.descricao}</TableCell>
-                      <TableCell>{benefit.beneficio}</TableCell>
-                      <TableCell>{benefit.comoAtivar}</TableCell>
+            
+            {benefitsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : benefitsError ? (
+              <Typography color="error">Erro ao carregar benefícios: {benefitsError}</Typography>
+            ) : (
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                      <TableCell>Logo</TableCell>
+                      <TableCell>Parceiro</TableCell>
+                      <TableCell>Descrição</TableCell>
+                      <TableCell>Benefício</TableCell>
+                      <TableCell>Como Ativar</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {selectedBenefits.map((benefit) => (
+                      <TableRow key={benefit.id}>
+                        <TableCell>
+                          {benefit.logo ? (
+                            <img 
+                              src={benefit.logo} 
+                              alt={`Logo ${benefit.parceiro}`} 
+                              style={{ maxWidth: 50, objectFit: 'contain' }} 
+                            />
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">Sem logo</Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>{benefit.parceiro}</TableCell>
+                        <TableCell>{benefit.descricao}</TableCell>
+                        <TableCell>{benefit.beneficio}</TableCell>
+                        <TableCell>{benefit.como_ativar}</TableCell>
+                      </TableRow>
+                    ))}
+                    {selectedBenefits.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} align="center">
+                          Nenhum benefício cadastrado para esta categoria.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
           </>
         );
 
@@ -122,26 +131,44 @@ export default function Home() {
           <>
             <Typography variant="h4" gutterBottom>Materiais de Apoio</Typography>
             <Typography paragraph>Lista de materiais disponíveis.</Typography>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                    <TableCell>Nome do Material</TableCell>
-                    <TableCell>Ano</TableCell>
-                    <TableCell>Link de Acesso</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {materiaisData.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{item.nome}</TableCell>
-                      <TableCell>{item.ano}</TableCell>
-                      <TableCell><a href={item.link} target="_blank" rel="noopener noreferrer">{item.link}</a></TableCell>
+            
+            {materialsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : materialsError ? (
+              <Typography color="error">Erro ao carregar materiais: {materialsError}</Typography>
+            ) : (
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                      <TableCell>Nome do Material</TableCell>
+                      <TableCell>Ano</TableCell>
+                      <TableCell>Link de Acesso</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {materials.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>{item.nome}</TableCell>
+                        <TableCell>{item.ano}</TableCell>
+                        <TableCell>
+                          <a href={item.link} target="_blank" rel="noopener noreferrer">{item.link}</a>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {materials.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center">
+                          Nenhum material cadastrado.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
           </>
         );
 
@@ -150,32 +177,58 @@ export default function Home() {
           <>
             <Typography variant="h4" gutterBottom>Fundos Parceiros</Typography>
             <Typography paragraph>Informações sobre fundos de investimento parceiros.</Typography>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                    <TableCell>Logo</TableCell>
-                    <TableCell>Parceiro</TableCell>
-                    <TableCell>Tipo de Investimento</TableCell>
-                    <TableCell>Tamanho de Cheque</TableCell>
-                    <TableCell>Tese</TableCell>
-                    <TableCell>Contato</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {fundosData.map((fundo) => (
-                    <TableRow key={fundo.id}>
-                      <TableCell>{fundo.logo ? <img src={fundo.logo} alt={fundo.parceiro} style={{ maxWidth: 50 }} /> : 'Sem logo'}</TableCell>
-                      <TableCell>{fundo.parceiro}</TableCell>
-                      <TableCell>{fundo.tipoInvestimento}</TableCell>
-                      <TableCell>{fundo.tamanhoCheque}</TableCell>
-                      <TableCell>{fundo.tese}</TableCell>
-                      <TableCell>{fundo.contato}</TableCell>
+            
+            {fundsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : fundsError ? (
+              <Typography color="error">Erro ao carregar fundos: {fundsError}</Typography>
+            ) : (
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                      <TableCell>Logo</TableCell>
+                      <TableCell>Parceiro</TableCell>
+                      <TableCell>Tipo de Investimento</TableCell>
+                      <TableCell>Tamanho de Cheque</TableCell>
+                      <TableCell>Tese</TableCell>
+                      <TableCell>Contato</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {funds.map((fundo) => (
+                      <TableRow key={fundo.id}>
+                        <TableCell>
+                          {fundo.logo ? (
+                            <img 
+                              src={fundo.logo} 
+                              alt={`Logo ${fundo.parceiro}`} 
+                              style={{ maxWidth: 50, objectFit: 'contain' }} 
+                            />
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">Sem logo</Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>{fundo.parceiro}</TableCell>
+                        <TableCell>{fundo.tipo_investimento}</TableCell>
+                        <TableCell>{fundo.tamanho_cheque}</TableCell>
+                        <TableCell>{fundo.tese}</TableCell>
+                        <TableCell>{fundo.contato}</TableCell>
+                      </TableRow>
+                    ))}
+                    {funds.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} align="center">
+                          Nenhum fundo parceiro cadastrado.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
           </>
         );
 
@@ -184,38 +237,66 @@ export default function Home() {
           <>
             <Typography variant="h4" gutterBottom>Mentores</Typography>
             <Typography paragraph>Lista de mentores disponíveis para startups.</Typography>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                    <TableCell>Foto</TableCell>
-                    <TableCell>Nome</TableCell>
-                    <TableCell>Cargo</TableCell>
-                    <TableCell>Empresa</TableCell>
-                    <TableCell>Especialidades</TableCell>
-                    <TableCell>Contato</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {mentoresData.map((mentor) => (
-                    <TableRow key={mentor.id}>
-                      <TableCell>{mentor.foto ? <img src={mentor.foto} alt={mentor.nome} style={{ maxWidth: 50, borderRadius: '50%' }} /> : 'Sem foto'}</TableCell>
-                      <TableCell>{mentor.nome}</TableCell>
-                      <TableCell>{mentor.cargo}</TableCell>
-                      <TableCell>{mentor.empresa}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                          {mentor.especialidades?.map((esp) => (
-                            <Chip key={esp} label={esp} size="small" />
-                          ))}
-                        </Box>
-                      </TableCell>
-                      <TableCell>{mentor.contato}</TableCell>
+            
+            {mentorsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : mentorsError ? (
+              <Typography color="error">Erro ao carregar mentores: {mentorsError}</Typography>
+            ) : (
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                      <TableCell>Foto</TableCell>
+                      <TableCell>Nome</TableCell>
+                      <TableCell>Cargo</TableCell>
+                      <TableCell>Empresa</TableCell>
+                      <TableCell>Especialidades</TableCell>
+                      <TableCell>Contato</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {mentors.map((mentor) => (
+                      <TableRow key={mentor.id}>
+                        <TableCell>
+                          {mentor.foto ? (
+                            <img 
+                              src={mentor.foto} 
+                              alt={`Foto ${mentor.nome}`} 
+                              style={{ maxWidth: 50, maxHeight: 50, objectFit: 'cover', borderRadius: '50%' }}
+                            />
+                          ) : (
+                            <Box sx={{ width: 50, height: 50, bgcolor: '#f5f5f5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Typography variant="caption" color="text.secondary">Sem foto</Typography>
+                            </Box>
+                          )}
+                        </TableCell>
+                        <TableCell>{mentor.nome}</TableCell>
+                        <TableCell>{mentor.cargo}</TableCell>
+                        <TableCell>{mentor.empresa}</TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {mentor.especialidades?.map((esp) => (
+                              <Chip key={esp} label={esp} size="small" />
+                            ))}
+                          </Box>
+                        </TableCell>
+                        <TableCell>{mentor.contato}</TableCell>
+                      </TableRow>
+                    ))}
+                    {mentors.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} align="center">
+                          Nenhum mentor cadastrado.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
           </>
         );
 

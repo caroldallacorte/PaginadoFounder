@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Box, Button, TextField, Typography, Paper, Container } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Box, Button, TextField, Typography, Paper, Container, CircularProgress } from '@mui/material';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../contexts/AuthContext'; 
 
@@ -7,7 +7,14 @@ export default function AdminLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
-  const { login } = useAuth(); 
+  const { login, isAuthenticated, isLoading } = useAuth(); 
+
+  // Check if user is already authenticated and redirect if needed
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      router.push('/admin/dashboard');
+    }
+  }, [isAuthenticated, isLoading, router]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -35,6 +42,21 @@ export default function AdminLogin() {
       setError('Erro ao tentar fazer login. Por favor, tente novamente.');
     }
   };
+
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return (
+      <Container sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Container>
+    );
+  }
+
+  // If already authenticated, we'll redirect in the useEffect
+  // This prevents the login form from briefly appearing during redirect
+  if (isAuthenticated) {
+    return null;
+  }
 
   return (
     <Container maxWidth="sm" sx={{ mt: 8 }}>
